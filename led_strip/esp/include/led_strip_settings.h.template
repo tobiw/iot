@@ -1,0 +1,9 @@
+#include <ESP8266WiFi.h>
+
+const char* ssid     = "...";
+const char* password = "...";
+IPAddress mqtt_server(10, 1, 2, 1);
+const char* mqtt_user = "...";
+const char* mqtt_password = "...";
+#define TOPIC "home/lights/..."
+#define TOPIC_IOT_STATUS "..." // optional

@@ -1,0 +1,9 @@
+LED Strip control with ATtiny85 and ESP01
+=========================================
+
+How to use
+----------
+- In esp/, copy include/led_strip_settings.h.template to include/led_strip_settings.h
+- Modify settings as required (Wifi credentials, MQTT server and MQTT topic)
+- Compile with pio run and upload to esp with pio run -t upload
+- In attiny/, compile with pio run and upload with pio run -t upload
