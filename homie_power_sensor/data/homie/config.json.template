@@ -1,0 +1,26 @@
+{
+  "name": "Power Sensor",
+  "device_id": "power-sensor",
+  "device_stats_interval": 60,
+  "wifi": {
+    "ssid": "...",
+    "password": "...",
+    "ip": "...",
+    "mask": "...",
+    "gw": "..."
+  },
+  "mqtt": {
+    "host": "...",
+    "port": 1883,
+    "base_topic": "home/",
+    "auth": true,
+    "username": "...",
+    "password": "..."
+  },
+  "ota": {
+    "enabled": false
+  },
+  "settings": {
+    "percentage": 55
+  }
+} 

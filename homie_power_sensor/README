@@ -1,0 +1,12 @@
+ESP8266 Power Sensor
+====================
+
+Counts pulses on an input pin and publishes current power consumption in Watt as well as daily total power consumption in Watthours to MQTT.
+
+Uses https://github.com/avishorp/TM1637 which is not available via the platformio library manager.
+
+How to use
+----------
+- Copy data/homie/config.json.template to data/homie/config.json
+- Adjust values as required
+- Compile with pio run, upload with pio run -t upload, upload config.json with pio run -t uploadfs
