@@ -1,0 +1,6 @@
+const char* ssid     = "...";
+const char* password = "...";
+const char* mqtt_server = "...";
+const char* TOPIC_SENSOR = "home/../sensor";
+const char* TOPIC_HEATPUMP = "home/.../heatpump";
+const char* MQTT_CLIENT_NAME = "...";
