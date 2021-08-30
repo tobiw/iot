@@ -37,6 +37,7 @@ int lastPulseReading = HIGH;
 
 const unsigned long measurement_interval = 60000UL; // process pulses every minute
 const float watthour_multiplier = 3600000UL / measurement_interval;
+float pulsesPerKWh = 1.0; // configurable via MQTT
 volatile unsigned long pulseCount = 0;
 unsigned long totalPulses = 0;
 
@@ -68,6 +69,15 @@ bool led_message_handler(const HomieRange& range, const String& value) {
   return true;
 }
 
+bool pulses_per_kwh_message_handler(const HomieRange& range, const String& value) {
+  float f = strtof(value.c_str(), NULL);
+  if (f > 0.0 && f < 100.0) {
+    pulsesPerKWh = f;
+    Homie.getLogger() << "pulsesPerKWh set to " << f << endl;
+  }
+  return true;
+}
+
 bool reset_wh_message_handler(const HomieRange& range, const String& value) {
   totalPulses = 0;
   Homie.getLogger() << "totalPulses reset done" << endl;
@@ -84,6 +94,7 @@ void setupHandler() {
   powerNode.advertise("watthours").settable(reset_wh_message_handler);
   //sensorsNode.advertise("temperature");
   ledNode.advertise("mode").settable(led_message_handler);
+  ledNode.advertise("pulses-per-kwh").settable(pulses_per_kwh_message_handler);
   
   display.setBrightness(0x0a);
   display.showNumberDec(8888);
@@ -110,13 +121,12 @@ void loopHandler() {
 
   // Calculate power consumption and send
   if (now - lastPowerSent >= 60000 || lastPowerSent == 0) { // every minute
-    float p = pulseCount; // new metre is 1000 pulses perkWh; otherwise: ... / 1.6; // 1600 pulses = 1 kWh
+    float p = pulseCount / pulsesPerKWh;
     p *= watthour_multiplier; // convert to Watts
-    //int p_i = (int)(p / 2); // correct by factor of 2 (not sure why)
     display.showNumberDec((int)p, false);
     powerNode.setProperty("watts").send(String((int)p));
 
-    p = totalPulses / 1.6; // 1600 pulses = 1 kWh
+    p = totalPulses / pulsesPerKWh;
     powerNode.setProperty("watthours").send(String((int)p));
     
     lastPowerSent = now;
