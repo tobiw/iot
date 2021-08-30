@@ -1,8 +1,12 @@
 Sensor and (433 MHz) RF, Heatpump (IR) Control Box
 ==================================================
 
+ESP01 and Arduino Pro Mini
+
 How to use
 ----------
 - In esp/, copy include/settings.h.template to include/settings.h
 - Adjust settings as required (Wifi credentials, MQTT server, MQTT topics)
 - Compile with pio run, upload with pio run -t upload
+- In atmega/, compile with pio run and upload with pio -t upload
+- If HeatpumpIR library doesn't compile, remove dependency IRSenderESP8266 from library.json
