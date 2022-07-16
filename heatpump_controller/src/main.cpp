@@ -3,8 +3,10 @@
 #include <SPI.h>
 #include <Ethernet.h>
 #include <PubSubClient.h>
+#include <DHT.h>
 
 #include "ir_sender.h"
+#include "ir_decoder.h"
 #include "secrets.h"
 
 
@@ -19,6 +21,9 @@ const char* password = WIFI_PASSWORD;
 
 EthernetClient client;
 PubSubClient mqtt_client;
+
+DHT dht(4, DHT22);
+bool disable_dht = false;
 
 bool new_heatpump_setting = false;
 uint8_t current_temperature = 0;
@@ -40,8 +45,10 @@ void mqtt_cb(char* topic, byte* payload, unsigned int length) {
       Serial.print("Got temperature: ");
       Serial.println(current_temperature);
   }
-  //mqtt_client.publish(TOPIC "/echo", msgbuf);
-  delay(100);
+
+  sprintf(msgbuf, "%u", current_temperature);
+  mqtt_client.publish(TOPIC "/temperature", msgbuf);
+  delay(10);
 }
 
 void mqtt_connect() {
@@ -85,6 +92,8 @@ void setup() {
     pinMode(PIN_IR, OUTPUT);
     digitalWrite(PIN_IR, LOW);
 
+    dht.begin();
+
     digitalWrite(13, HIGH);
     delay(1000);
     digitalWrite(13, LOW);
@@ -92,10 +101,41 @@ void setup() {
     Serial.println("Setup done.");
 }
 
-void loop() {
-    static int i = 0;
+void send_sensors() {
+    static unsigned long last_dht_read = 0;
+    const unsigned long now = millis();
 
+    if ((now - last_dht_read) < 10000) return;
+
+    last_dht_read = now;
+
+    static float last_t = 0;
+    static int last_h = 0;
+    char t_buf[6];
+    float t = dht.readTemperature();
+    int h = (int)dht.readHumidity();
+    if (!isnan(t) && !isnan(h)) {
+        dtostrf(t, 3, 1, t_buf);
+        char msg[64];
+        sprintf(msg, "{ \"temperature\": %s, \"humidity\": %d }", t_buf, h);
+
+        if (t != last_t || h != last_h) {
+            Serial.println(msg);
+            mqtt_client.publish(TOPIC "/dht", msg);
+            last_t = t;
+            last_h = h;
+        }
+    } else {
+        Serial.println("DHT NaN!");
+        disable_dht = true;
+    }
+}
+
+void loop() {
     mqtt_client.loop(); // process incoming MQTT messages
+    //decoder_loop();
+
+    if (!disable_dht) send_sensors();
 
     if (new_heatpump_setting) {
         //                    0     1     2     3     4     5     6     7     8     9    10    11    12    13    14    15    16    17
