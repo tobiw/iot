@@ -6,9 +6,10 @@
 #include <DHT.h>
 
 #include "ir_sender.h"
+#ifdef WITH_IR_DECODER
 #include "ir_decoder.h"
+#endif
 #include "secrets.h"
-
 
 byte mac[] = { 0xb2, 0xa1, 0xa0, 0x8a, 0x23, 0x45 };
 IPAddress ip_addr(10, 1, 1, 173);  // TODO: DHCP
@@ -133,7 +134,15 @@ void send_sensors() {
 
 void loop() {
     mqtt_client.loop(); // process incoming MQTT messages
-    //decoder_loop();
+
+#ifdef WITH_IR_DECODER
+    byte *ir_bytes = NULL;
+    int num_ir_bytes = decoder_loop(&ir_bytes);
+    if (num_ir_bytes > 0) {
+        Serial.print("Got IR decoder bytes: ");
+        Serial.println(num_ir_bytes);
+    }
+#endif
 
     if (!disable_dht) send_sensors();
 
