@@ -17,8 +17,11 @@ IPAddress ip_gw(10, 1, 0, 2);
 IPAddress netmask(255, 255, 0, 0);
 const char* ssid     = WIFI_SSID;
 const char* password = WIFI_PASSWORD;
-#define TOPIC_IOT_STATUS "iot/ir-sender"
-#define TOPIC "home/ir-sender"
+#define TOPIC_IOT_STATUS "home/livingroom/heatpump/online"
+#define TOPIC_HEATPUMP "home/livingroom/heatpump"
+#define TOPIC_HEATPUMP_TEMPERATURE_SET TOPIC_HEATPUMP "/temperature/set"
+#define TOPIC_HEATPUMP_MODE_SET TOPIC_HEATPUMP "/mode/set"
+#define TOPIC_DHT "home/livingroom/sensors"
 
 EthernetClient client;
 PubSubClient mqtt_client;
@@ -29,6 +32,19 @@ bool disable_dht = false;
 bool new_heatpump_setting = false;
 uint8_t current_temperature = 0;
 
+enum {
+    HEATPUMP_MODE_OFF = 0,
+    HEATPUMP_MODE_AUTO,
+    HEATPUMP_MODE_HEAT,
+} current_mode;
+
+/*
+ * home/ir-sender/set T17
+ * -> home/ir-sender/temperature 17
+ * home/ir-sender/set T16
+ * -> home/ir-sender/temperature 16
+ * home/ir-sender/mode/set off
+ */
 void mqtt_cb(char* topic, byte* payload, unsigned int length) {
   static char msgbuf[10];
   uint8_t i;
@@ -38,17 +54,36 @@ void mqtt_cb(char* topic, byte* payload, unsigned int length) {
   }
   msgbuf[i] = '\0';
 
-  if (msgbuf[0] == 'T') {
-      current_temperature = atoi(&msgbuf[1]);
+  if (strcmp(topic, TOPIC_HEATPUMP_TEMPERATURE_SET) == 0) {
+      current_temperature = atoi(msgbuf);
       new_heatpump_setting = true;
       if (current_temperature < 16) current_temperature = 16;
       else if (current_temperature > 28) current_temperature = 28;
       Serial.print("Got temperature: ");
       Serial.println(current_temperature);
+
+      // Send current temperature setting back out to MQTT
+      sprintf(msgbuf, "%u", current_temperature);
+      mqtt_client.publish(TOPIC_HEATPUMP "/temperature", msgbuf);
+  } else if (strcmp(topic, TOPIC_HEATPUMP_MODE_SET) == 0) {
+      if (msgbuf[0] == 'o') { // "off"
+          current_mode = HEATPUMP_MODE_OFF;
+      } else if (msgbuf[0] == 'a') { // "auto"
+          current_mode = HEATPUMP_MODE_AUTO;
+      } else if (msgbuf[0] == 'h') { // "heat"
+          current_mode = HEATPUMP_MODE_HEAT;
+      }
+      new_heatpump_setting = true;
+      Serial.print("Got mode: ");
+      Serial.println(current_mode);
+
+      // Send current mode back out to MQTT
+      mqtt_client.publish(TOPIC_HEATPUMP "/mode", msgbuf);
+  } else {
+      Serial.print("Unhandled topic: ");
+      Serial.println(topic);
   }
 
-  sprintf(msgbuf, "%u", current_temperature);
-  mqtt_client.publish(TOPIC "/temperature", msgbuf);
   delay(10);
 }
 
@@ -58,13 +93,16 @@ void mqtt_connect() {
     mqtt_client.setClient(client);
     mqtt_client.setServer("10.1.2.1", 1883);
     mqtt_client.setCallback(mqtt_cb);
-    while (!(r = mqtt_client.connect("ir-sender", TOPIC_IOT_STATUS "/online", 1, true, "false")) && retry++ < 20);
+    while (!(r = mqtt_client.connect("ir-sender", TOPIC_IOT_STATUS, 1, true, "offline")) && retry++ < 20);
     if (!mqtt_client.connected()) {
         Serial.println("ERROR: Failed to connect to MQTT server");
         while (1) { delay(1); }
     }
-    mqtt_client.subscribe(TOPIC "/set");
-    mqtt_client.publish(TOPIC_IOT_STATUS "/online", "true", true);
+    mqtt_client.subscribe(TOPIC_HEATPUMP "/temperature/set");
+    mqtt_client.subscribe(TOPIC_HEATPUMP "/mode/set");
+    Serial.println(F("Subscribed to " TOPIC_HEATPUMP_TEMPERATURE_SET));
+    Serial.println(F("Subscribed to " TOPIC_HEATPUMP_MODE_SET));
+    mqtt_client.publish(TOPIC_IOT_STATUS, "online", true);
 }
 
 void setup() {
@@ -122,7 +160,7 @@ void send_sensors() {
 
         if (t != last_t || h != last_h) {
             Serial.println(msg);
-            mqtt_client.publish(TOPIC "/dht", msg);
+            mqtt_client.publish(TOPIC_DHT "/json", msg);
             last_t = t;
             last_h = h;
         }
@@ -149,7 +187,11 @@ void loop() {
     if (new_heatpump_setting) {
         //                    0     1     2     3     4     5     6     7     8     9    10    11    12    13    14    15    16    17
         uint8_t data[18] = { 0x23, 0xCB, 0x26, 0x01, 0x00, 0x20, 0x48, 0x00, 0x00, 0x00, 0x61, 0x00, 0x00, 0x00, 0x10, 0x40, 0x00, 0x00 };
-        ir_mitsubishi_set_mode(1, 0, data);
+        if (current_mode == HEATPUMP_MODE_OFF) {
+            ir_mitsubishi_set_mode(0, 0, data); // power (0 = off), mode
+        } else if (current_mode == HEATPUMP_MODE_HEAT) {
+            ir_mitsubishi_set_mode(1, 0, data); // power, mode (0 = heat)
+        }
         ir_mitsubishi_set_fan(MITSUBISHI_AIRCON1_FAN2 | MITSUBISHI_AIRCON1_VS_MIDDLE, data);
         ir_mitsubishi_set_temperature(current_temperature, data);
         ir_mitsubishi_set_2flow(0, data);
