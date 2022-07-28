@@ -34,7 +34,7 @@ uint8_t current_temperature = 0;
 
 enum {
     HEATPUMP_MODE_OFF = 0,
-    HEATPUMP_MODE_AUTO,
+    HEATPUMP_MODE_AUTO, // in this context AUTO is still heating mode but with auto settings for fans
     HEATPUMP_MODE_HEAT,
 } current_mode;
 
@@ -189,12 +189,20 @@ void loop() {
         uint8_t data[18] = { 0x23, 0xCB, 0x26, 0x01, 0x00, 0x20, 0x48, 0x00, 0x00, 0x00, 0x61, 0x00, 0x00, 0x00, 0x10, 0x40, 0x00, 0x00 };
         if (current_mode == HEATPUMP_MODE_OFF) {
             ir_mitsubishi_set_mode(0, 0, data); // power (0 = off), mode
-        } else if (current_mode == HEATPUMP_MODE_HEAT) {
+        } else { // heat or auto
             ir_mitsubishi_set_mode(1, 0, data); // power, mode (0 = heat)
         }
-        ir_mitsubishi_set_fan(MITSUBISHI_AIRCON1_FAN2 | MITSUBISHI_AIRCON1_VS_MIDDLE, data);
-        ir_mitsubishi_set_temperature(current_temperature, data);
-        ir_mitsubishi_set_2flow(0, data);
+
+        if (current_mode == HEATPUMP_MODE_AUTO) {
+            ir_mitsubishi_set_fan(MITSUBISHI_AIRCON1_FAN_AUTO | MITSUBISHI_AIRCON1_VS_AUTO, data);
+            ir_mitsubishi_set_temperature(current_temperature, data);
+            ir_mitsubishi_set_2flow(2, data);
+        } else {
+            ir_mitsubishi_set_fan(MITSUBISHI_AIRCON1_FAN2 | MITSUBISHI_AIRCON1_VS_MIDDLE, data);
+            ir_mitsubishi_set_temperature(current_temperature, data);
+            ir_mitsubishi_set_2flow(0, data);
+        }
+
         ir_mitsubishi_calculate_checksum(data);
         ir_send_message(data);
 
